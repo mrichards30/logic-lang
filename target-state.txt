@@ -1,0 +1,46 @@
+/*
+
+The Ruritanian equestrian team consists of four men named Mountback, Hacking, 
+Klamberon and Topalov. Photographs taken at their last competition show them 
+riding (if that’s the word) four different horses – Bay, Black, Chestnut and 
+Gray – each of which is engaged in a different activity. One is standing still, 
+one is jumping, one is trotting and the fourth is going at a fine gallop with 
+Mountback hanging on for dear life.
+
+ -> Bay, with Hacking aboard, is neither trotting nor jumping;
+ -> Klamberon’s horse is also not jumping;
+ -> Gray is not trotting; and 
+ -> Topalov sits proudly, if temporarily, astride Chestnut
+
+What do the four photographs show?
+
+*/
+
+enum Equestrian = Mountback | Hacking | Klamberon | Topalov;
+enum Horse = Bay | Black | Chestnut | Gray;
+enum Activity = StandingStill | Jumping | Trotting | GallopingWithMountback;
+
+injective fn getActivity :: Horse -> Activity;
+injective fn getHorse :: Equestrian -> Horse; 
+
+getHorse(Hacking) = Bay or getActivity(Mountback) = Bay;
+getActivity(getHorse(Klamberon)) != Jumping;
+getActivity(Gray) != Trotting;
+getHorse(Topalov) = Chestnut;
+
+/* 
+
+We have three types :
+
+Variables, domains for each variable, constraints
+
+Variables   = { getHorse(Mountback), getHorse(Hacking), getHorse(Klamberon), getHorse(Topalov), getActivity }
+Domains     = { Equestrian,          Equestrian,        Equestrian,          Equatrian,         Horse } (respective of above)
+Constraints = { getHorse(Mountback) != getHorse(Hacking), getHorse(Hacking) != getHorse(Topalov), getHorse(Klamberon) != getHorse(Topalov), getHorse(Hacking) = Bay }
+
+
+Strategy: backtracking via a stack 
+That is, initially, all variables are unassigned; we start by setting variable 1 to its first possible value. If this contradicts any
+of our  constraints, we pop this off the stack and try its second value. If this works we move onto getHorse(Hacking)=Equestrian(1), etc
+
+*/
