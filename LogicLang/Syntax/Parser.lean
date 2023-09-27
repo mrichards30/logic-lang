@@ -1,7 +1,9 @@
 import LogicLang.Syntax.HandledType
 import LogicLang.Syntax.Scanner
 
-def assertOrderOfTokens (expected : List TokenType) (actual : List Token) : HandledResult String Expression (List Token) := 
+abbrev ParseResult := HandledResult String Expression (List Token)
+
+def assertOrderOfTokens (expected : List TokenType) (actual : List Token) : ParseResult := 
     if expected.length == actual.length then
         let zip := expected.zip actual
         if zip.all (λ(type, token) => type == token.tokenType) then
@@ -14,7 +16,7 @@ def assertOrderOfTokens (expected : List TokenType) (actual : List Token) : Hand
             | none => HandledResult.failed "unexpected token " 
     else HandledResult.failed "mismatched comparison length"
 
-def checkInjectiveFunctionDefinition (tokens : List Token) : HandledResult String Expression (List Token) := 
+def checkInjectiveFunctionDefinition (tokens : List Token) : ParseResult := 
     match tokens with
     | injectiveKeyword :: fnKeyword :: functionName :: doubleColon :: domain :: arrow :: range :: semicolon ::_ => do
         unless injectiveKeyword.tokenType == TokenType.Injective do return tokens
@@ -26,7 +28,7 @@ def checkInjectiveFunctionDefinition (tokens : List Token) : HandledResult Strin
             (Expression.functionDefinition (some FnModifier.injective) functionName.lexeme domain.lexeme range.lexeme)
     | _ => HandledResult.delegate tokens
 
-def checkFunctionDefinition (tokens : List Token) : HandledResult String Expression (List Token) := 
+def checkFunctionDefinition (tokens : List Token) : ParseResult := 
     match tokens with
     | fnKeyword :: functionName :: doubleColon :: domain :: arrow :: range :: semicolon ::_ => do
         unless fnKeyword.tokenType == TokenType.Fn do return tokens
@@ -38,7 +40,7 @@ def checkFunctionDefinition (tokens : List Token) : HandledResult String Express
             (Expression.functionDefinition none functionName.lexeme domain.lexeme range.lexeme)
     | _ => HandledResult.delegate tokens
 
-def checkEnumDefinition (tokens : List Token) : HandledResult String Expression (List Token) :=
+def checkEnumDefinition (tokens : List Token) : ParseResult :=
     match tokens with 
     | enumKeyword :: enumIdentifier :: equalsSign :: firstIdentifier :: xs => do 
         unless enumKeyword.tokenType == TokenType.Enum do return tokens
@@ -122,26 +124,60 @@ def isComparisonOperator (token : Token) : Bool :=
     | some _ => true
     | none => false
 
-def checkAssertionExpression (tokens : List Token) : HandledResult String Expression (List Token) := 
-    let comparator? := tokens.find? (λtoken => isComparisonOperator token)
-    match comparator? with 
-    | some comparator => 
-        let pre := tokens.takeWhile (λtoken => !isComparisonOperator token)
-        let post := (tokens.reverse).takeWhile (λtoken => !isComparisonOperator token) |> List.reverse
-        let op? := toComparisonOperation comparator
+def findIndex? (f : α -> Bool) (lst : List α) : Option Nat := 
+    let elementsAndIndex := lst.zip (List.range (lst.length - 1))
+    let result? := elementsAndIndex.find? λ(e, _) => f e
+    match result? with 
+        | some (_, i) => some i
+        | none => none 
 
-        match (parseValue pre, parseValue post, op?) with
-        | (.handled x, .handled y, some op) => 
-            .handled (Expression.assertion (LogicalPredicate.predicate x op y))
-        | (.failed e1, .failed e2, _) => .failed (e1 ++ "; also, " ++ e2)
-        | (.failed e, _, _) => .failed e
-        | (_, .failed e, _) => .failed e
-        | (_, _, _) => .delegate tokens
+def checkAssertionExpression (tokens : List Token) : ParseResult := 
+    let handle (tokens : List Token) : ParseResult := 
+        let comparator? := tokens.find? (λtoken => isComparisonOperator token)
+        match comparator? with 
+        | some comparator => 
+            let pre := tokens.takeWhile (λtoken => !isComparisonOperator token)
+            let post := (tokens.reverse).takeWhile (λtoken => !isComparisonOperator token) |> List.reverse
+            let op? := toComparisonOperation comparator
 
-    | none => .delegate tokens
+            match (parseValue pre, parseValue post, op?) with
+            | (.handled x, .handled y, some op) => 
+                .handled (Expression.assertion (LogicalPredicate.predicate x op y))
+            | (.failed e1, .failed e2, _) => .failed (e1 ++ "; also, " ++ e2)
+            | (.failed e, _, _) => .failed e
+            | (_, .failed e, _) => .failed e
+            | (_, _, _) => .delegate tokens
+
+        | none => .delegate tokens
+
+    let handleConnectedPredicate (index : Nat) (op : LogicalConnective) : ParseResult := 
+
+        let lhs := tokens.take index
+        let rhs := (tokens.drop (index + 1)) 
+
+        let syntaxError (side : String) := HandledResult.failed 
+            s!"syntax error on the {side} of the {op} operator; we expected to find a logical expression."
+
+        let leftExpr := if lhs.length < tokens.length then checkAssertionExpression lhs else syntaxError "left"
+        let rightExpr := if rhs.length < tokens.length then checkAssertionExpression rhs else syntaxError "right"
+
+        match (leftExpr, rightExpr) with
+            | (HandledResult.handled (Expression.assertion l), HandledResult.handled (Expression.assertion r)) => .handled (Expression.assertion (LogicalPredicate.connect (l) op r))
+            | (HandledResult.failed e1, HandledResult.failed e2) => .failed (e1 ++ "; also " ++ e2)
+            | (HandledResult.failed e, _) => .failed e
+            | (_, HandledResult.failed e) => .failed e
+            | (_, _) => .failed "incorrect type of expression in connected logical statement. only assertions can be used here."
+        
+    let andIndex? := findIndex? (λtoken => token.tokenType == TokenType.And) tokens
+    let orIndex? := findIndex? (λtoken => token.tokenType == TokenType.Or) tokens
+    match (andIndex?, orIndex?) with
+        | (some index, _) => handleConnectedPredicate index LogicalConnective.and
+        | (none, some index) => handleConnectedPredicate index LogicalConnective.or -- and before or 
+        | (none, none) => handle tokens
+    termination_by checkAssertionExpression xs => xs.length 
 
 def parseTokens (tokens : List Token) : Except String Expression := 
-    let handledResult : HandledResult String Expression (List Token) := do
+    let handledResult : ParseResult := do
         let next <- checkFunctionDefinition tokens
         let next <- checkInjectiveFunctionDefinition next
         let next <- checkEnumDefinition next

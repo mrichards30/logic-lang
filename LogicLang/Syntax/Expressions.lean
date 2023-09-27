@@ -12,6 +12,11 @@ inductive LogicalConnective where
     | and : LogicalConnective
 deriving Repr
 
+instance : ToString LogicalConnective where
+    toString op := match op with 
+        | LogicalConnective.or => "∨"
+        | LogicalConnective.and => "∧"
+
 inductive Value where
     | literal : String -> Value
     | functionCall : String -> Value -> Value
