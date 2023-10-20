@@ -5,12 +5,12 @@ deriving Repr
 inductive ComparisonOperation where
     | equals : ComparisonOperation
     | notEquals : ComparisonOperation
-deriving Repr
+deriving Repr, BEq 
 
 inductive LogicalConnective where
     | or : LogicalConnective 
     | and : LogicalConnective
-deriving Repr
+deriving Repr, BEq
 
 instance : ToString LogicalConnective where
     toString op := match op with 
@@ -20,13 +20,13 @@ instance : ToString LogicalConnective where
 inductive Value where
     | literal : String -> Value
     | functionCall : String -> Value -> Value
-deriving Repr
+deriving Repr, BEq 
 
 inductive LogicalPredicate where 
     | connect : LogicalPredicate -> LogicalConnective -> LogicalPredicate -> LogicalPredicate
     | predicate : Value -> ComparisonOperation -> Value -> LogicalPredicate
     | invertedPredicate : LogicalPredicate -> LogicalPredicate
-deriving Repr
+deriving Repr, BEq
 
 inductive Expression where
     | expressions : List Expression -> Expression
