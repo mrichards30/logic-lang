@@ -1,0 +1,22 @@
+@startuml LogicLang Internal Interactions
+
+actor User 
+participant Editor 
+participant Parser 
+participant Solver 
+
+User -> Editor: Enters file path 
+Editor -> Parser: Plaintext file contents 
+
+alt Parser finds errors  
+    Parser -->> Editor: List of errors
+    Editor -->> User: Highlights offending lines; displays error
+
+else Parser finds no errors
+    Parser -> Solver: Parsed expression
+    Solver -->> Editor: List of solutions
+    Editor -->> User: Pretty-printed solutions in a table
+
+end 
+
+@enduml  

@@ -32,3 +32,4 @@ def main (args : List String) : IO UInt32 := do
                 pure 64
             | none => pure 66 -- unreadable input
         pure 0
+        

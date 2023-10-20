@@ -1,39 +1,58 @@
-/-
+import LogicLang.Syntax.Scanner
 
-The type described in this file implements the chain of responsibility pattern.
-
-That is, we can create a pipeline of handlers that take some input to a HandledResult,
-where exactly one will end up handling the input and either succeed or fail; the others 
-that deem the input to not be their responsibility will delegate the input to the next 
-function in the pipeline.
-
-An implementation of the pipeline will end by failing if we finish still trying to
-delegate the input.
-
-Example:
-
-fn handler : (input : α) -> HandledResult {
-  if !shouldHandle then return .delegate input
-
-  do some computation
-
-  return .failed x or .handled x
-}
-
--/
-
-inductive HandledResult (ε α i : Type u) where
-  -- it is not my responsibility to compute this value 
-  | delegate (input : i) : HandledResult ε α i
-  -- it is my responsibility to compute this value; computation successful
-  | handled (value : α) : HandledResult ε α i
-  -- it is my responsibility to compute this value; however, an error occurred
-  | failed (error : ε) : HandledResult ε α i
+structure ParserContext (ε i α : Type) where 
+  input : i 
+  result : Option α := none  
+  errors : List ε := []
 deriving Repr
 
-instance : Monad (HandledResult ε α) where 
-    pure x := HandledResult.delegate x
-    bind attempt next := match attempt with 
-        | HandledResult.failed e => HandledResult.failed e
-        | HandledResult.handled x => HandledResult.handled x
-        | HandledResult.delegate input => next input
+class WithErrors (X : Type -> Type -> Type -> Type) where 
+  error (val : ε) (current : X ε i α) : X ε i α
+
+instance : WithErrors ParserContext  where
+  error x current := { current with errors := x :: current.errors }
+
+class HandlerChain (X : Type -> Type -> Type) where 
+  yield (val : α) (current : X i α) : X i α
+  delegate (current : X i α) (next : i -> X i α) : X i α
+
+instance : HandlerChain (ParserContext ε)  where 
+  yield x current := { current with result := x }
+  delegate current next := match current.result with
+    | some _ => current 
+    | none => {
+      current with 
+        result := current.input >>= (λi => (next i).result)
+    }
+
+instance : Monad (ParserContext ε (List Token)) where 
+  bind x next := { x with 
+      result := x.result >>= (λr => (next r).result) 
+    }
+  pure x := { result := x, input := [] }
+  
+
+infix:72 " ~> " => HandlerChain.delegate
+
+abbrev TokenParserContext (α : Type) := ParserContext (Token × String) (List Token) α 
+
+-- Example
+
+def exampleParserContext : TokenParserContext Expression := {
+  input := [],
+  result := none,
+  errors := []
+}
+
+#eval exampleParserContext 
+      ~> λ_ => { input := [], result := none }
+      ~> λ_ => { input := [], result := some (Expression.enumDefinition "First" ["1"]) }
+      ~> λ_ => { input := [], result := some (Expression.enumDefinition "Second" ["2"]) }
+
+#eval exampleParserContext 
+      ~> λ_ => { input := [], result := none }
+      ~> λ_ => { input := [], result := some (Expression.enumDefinition "First" ["1"]) }
+      ~> λ_ => { input := [], result := some (Expression.enumDefinition "Second" ["2"]) }
+
+def ParserContext.error (error : ε) (ctx : ParserContext ε α i) : ParserContext ε α i := 
+  { ctx with errors := error :: ctx.errors }

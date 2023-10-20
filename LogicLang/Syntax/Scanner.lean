@@ -86,11 +86,11 @@ def scanToken (code : String) : (Nat × Except Char TokenType) :=
                 (1, Except.error x)
         | [] => (0, Except.ok .EndOfFile)
 
-structure Token where 
-    tokenType : TokenType 
-    lexeme : String 
-    lineNumber : Nat 
-    colNumber : Nat 
+structure Token where -- meaningless defaults make testing/debugging faster and easier as we don't have to write everything out
+    tokenType : TokenType  
+    lexeme : String := "<lexeme>"
+    lineNumber : Nat := 0
+    colNumber : Nat := 0
 deriving Repr
 
 def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) := 
