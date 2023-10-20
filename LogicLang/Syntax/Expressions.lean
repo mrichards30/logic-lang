@@ -29,7 +29,15 @@ inductive LogicalPredicate where
 deriving Repr
 
 inductive Expression where
+    | expressions : List Expression -> Expression
     | functionDefinition : (Option FnModifier) -> String -> String -> String -> Expression
     | enumDefinition : String -> List String -> Expression
     | assertion : LogicalPredicate -> Expression
 deriving Repr
+
+instance : Append Expression where 
+    append a b := match (a, b) with 
+        | (.expressions es1, .expressions es2) => .expressions (es1 ++ es2)
+        | (.expressions es, e) => .expressions (e :: es)
+        | (e, .expressions es) => .expressions (e :: es)
+        | (e1, e2) => .expressions [e1, e2]

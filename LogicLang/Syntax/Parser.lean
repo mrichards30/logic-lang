@@ -220,7 +220,7 @@ def parseSingleLineString (input : String) (lineNumber : Nat) : Except String Ex
     let tokens <- scanTokens input lineNumber
     parseTokens tokens 
 
-def parseMultiLineString (input : String) : Except String (List Expression) :=
+def parseMultiLineString (input : String) : Except String Expression :=
 
     let lines := String.splitOn input "\n"
     let indexList := List.range lines.length
@@ -228,13 +228,13 @@ def parseMultiLineString (input : String) : Except String (List Expression) :=
                         |> List.filter λ(s, _) => !s.trim.isEmpty
     aux linesByIndex
 
-    where aux (tuples : List (String × Nat)) : Except String (List Expression) :=
+    where aux (tuples : List (String × Nat)) : Except String Expression :=
         match tuples with
             | (s, n) :: xs => do
                 let rest <- aux xs
                 let next <- parseSingleLineString s n
-                .ok (next :: rest)
-            | [] => .ok []
+                .ok (next ++ rest)
+            | [] => .ok (Expression.expressions [])
 
 def horseQuestion := parseMultiLineString 
         "
