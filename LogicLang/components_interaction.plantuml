@@ -13,7 +13,8 @@ alt Parser finds errors
     Editor -->> User: Highlights offending lines; displays error
 
 else Parser finds no errors
-    Parser -> Solver: Parsed expression
+    Parser -->> Editor: Parsed expression
+    Editor -> Solver: Parsed expression
     Solver -->> Editor: List of solutions
     Editor -->> User: Pretty-printed solutions in a table
 

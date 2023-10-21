@@ -6,48 +6,129 @@ structure PartialAssignment where
   assignedValue : String
 deriving Repr 
 
+def LogicalPredicate.substitute (original substitution : Value) (pred : LogicalPredicate) := 
+  
+  let rec substituteInValue (target : Value) : Value := 
+    if target == original 
+      then substitution 
+      else 
+        match target with 
+          | .literal _ => target
+          | .functionCall f x => .functionCall f (substituteInValue x) 
+  
+  match pred with 
+    | .predicate l x r => LogicalPredicate.predicate (substituteInValue l) x (substituteInValue r)
+    | .invertedPredicate p => .invertedPredicate (LogicalPredicate.substitute original substitution p)
+    | .connect l x r => .connect (LogicalPredicate.substitute original substitution l) x (LogicalPredicate.substitute original substitution r)
+
+def examplePred := (LogicalPredicate.predicate 
+  (.functionCall "getHorse" (.literal "Matt")) .equals (.functionCall "getHorse" (.literal "Kate")))
+
+#eval examplePred.substitute (.functionCall "getHorse" (.literal "Matt")) (.literal "Morse")
+
 partial def testConstraint (expr : PartialAssignment) (constraint : LogicalPredicate) : Bool :=
   match constraint with 
 
-    | .connect left op right => False 
+    | .connect left op right => 
+       match op with 
+        | .and => testConstraint expr left && testConstraint expr right -- and before or
+        | .or => testConstraint expr left || testConstraint expr right 
     
     | .predicate left op right => 
 
-      match (left, op, right) with  
+      match (left, op, right) with 
 
-        | (l, .notEquals, r) => 
-          let predWithEqInsteadOfNotEq := testConstraint expr (.predicate l .equals r)
-          !predWithEqInsteadOfNotEq
+        | (.literal a, .equals, .literal b) => a == b
 
-        | (.literal a, .equals, .literal b) => a == b -- just comparing two strings... 
+        | (.literal a, .notEquals, .literal b) => a != b  
 
         | (.functionCall functionName (.literal x), .equals, .literal b) | (.literal b, .equals, .functionCall functionName (.literal x)) => 
           -- comparing f(x)=C where C is a literal/constant; return false if `expr` is represented
           -- by the constraint, but has a different assignment value
             if expr.functionName == functionName && expr.functionParameter == x
               then expr.assignedValue == b
-              else True 
+              else True -- don't reject if it's not relevant
 
-        | _ => False 
+        | (.functionCall functionName (.literal x), .notEquals, .literal b) | (.literal b, .notEquals, .functionCall functionName (.literal x)) => 
+          -- comparing f(x)=C where C is a literal/constant; return false if `expr` is represented
+          -- by the constraint, but has a different assignment value
+            if expr.functionName == functionName && expr.functionParameter == x
+              then expr.assignedValue != b
+              else True -- don't reject if it's not relevant
 
-    | .invertedPredicate pred => !(testConstraint expr pred) 
+        | _ => True -- don't reject anything more nested; it will be substituted/simplified when it's time to check it
+
+    | .invertedPredicate (.invertedPredicate pred) => testConstraint expr pred
+
+    | .invertedPredicate (.predicate left op right) => 
+
+      match (left, op, right) with  
+
+        | (.literal a, .equals, .literal b) => a != b
+
+        | (.literal a, .notEquals, .literal b) => a == b  
+
+        | (.functionCall functionName (.literal x), .equals, .literal b) | (.literal b, .equals, .functionCall functionName (.literal x)) => 
+          -- comparing f(x)=C where C is a literal/constant; return false if `expr` is represented
+          -- by the constraint, but has a different assignment value
+            if expr.functionName == functionName && expr.functionParameter == x
+              then expr.assignedValue != b
+              else True -- don't reject if it's not relevant
+
+        | (.functionCall functionName (.literal x), .notEquals, .literal b) | (.literal b, .notEquals, .functionCall functionName (.literal x)) => 
+          -- comparing f(x)=C where C is a literal/constant; return false if `expr` is represented
+          -- by the constraint, but has a different assignment value
+            if expr.functionName == functionName && expr.functionParameter == x
+              then expr.assignedValue == b
+              else True -- don't reject if it's not relevant
+
+        | _ => True -- don't reject anything more nested; it will be substituted/simplified when it's time to check it
+
+    | .invertedPredicate (.connect left op right) => 
+
+      let invertedOp := if op == .and then .or else .and 
+      testConstraint expr (.connect (.invertedPredicate left) invertedOp (.invertedPredicate right))
 
 def testConstraints (constraints : List LogicalPredicate) (expr : PartialAssignment) : Bool := 
   constraints.all (testConstraint expr) 
 
--- TODO: FIX HARDCODING FROM ENUM DEFINITIONS
-def getDomainByName (s : String) : List String := 
-  if s == "Horse" then ["Matt's horse", "Joe's horse", "Kate's horse"]
+-- only for #eval testing
+def mockFindDomainByName (s : String) : List String := 
+  if s == "Horse" then ["Morse", "Jorse", "Lorse", "Korse"]
   else if s == "Degree" then ["Eco", "Maths", "Comp"]
-  else ["Matt", "Joe"]
+  else ["Matt", "Joe", "Kate", "Liz"]
 
-def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (constraints : List LogicalPredicate) : StateT (List LogicalPredicate) Id Unit := do
+def substituteNewAssignmentIntoConstraints (assignment : PartialAssignment) (constraints : List LogicalPredicate) : List LogicalPredicate := 
+  
+  let substitute (next : LogicalPredicate) : LogicalPredicate := 
+    next.substitute 
+      (.functionCall assignment.functionName (.literal assignment.functionParameter)) 
+      (.literal assignment.assignedValue)
+
+  constraints.foldl (λ acc next => substitute next :: acc) []
+
+/--
+- We don't want to include trivial observations in our 
+- solutions, e.g., "Joe" == "Joe". This function can be 
+- used in a filter over solutions to remove anything
+- uninteresting before returning them to the user.
+-/
+def LogicalPredicate.isNotTrivial (pred : LogicalPredicate) : Bool := 
+  match pred with 
+    | .connect l _ r => l.isNotTrivial || r.isNotTrivial 
+    | .invertedPredicate x => x.isNotTrivial 
+    | .predicate l _ r => 
+      match (l, r) with 
+        | (.literal _, .literal _) => False 
+        | (x, y) => x != y -- getHorse(Matt) == getHorse(Matt) should return false (trivial)
+
+def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (constraints : List LogicalPredicate) (getDomainByName : String -> List String) : StateT (List LogicalPredicate) Id Unit := do
   unless (<-get).isEmpty do return  -- only execute any code if a solution hasn't been found yet
     
   match remainingFnDomainAndRanges with 
     | [] => 
       -- erasing duplicates because the solution can overlap with the initial constraints
-      let solution := constraints.eraseDups 
+      let solution := constraints.eraseDups.filter LogicalPredicate.isNotTrivial
       set solution
 
     | (fn, x, domain) :: xs => 
@@ -59,7 +140,8 @@ def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (
         }) |> List.filter (testConstraints constraints)
 
       for p in nextAssignments do
-        backtrack xs ((toPred p) :: constraints)
+        let updatedConstraints := substituteNewAssignmentIntoConstraints p constraints
+        backtrack xs ((toPred p) :: updatedConstraints) getDomainByName
 
     return ()
 
@@ -72,10 +154,10 @@ def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (
 #eval (StateT.run (backtrack 
   [("getHorse", "Matt", "Horse"), ("getHorse", "Joe", "Horse"), ("getHorse", "Kate", "Horse")] 
   [
-    (.predicate (.functionCall "getHorse" (.literal "Matt")) .equals (.literal "Matt's horse")),
-    (.predicate (.functionCall "getHorse" (.literal "Joe")) .equals (.literal "Joe's horse")),
-    (.predicate (.functionCall "getHorse" (.literal "Kate")) .equals (.literal "Kate's horse"))
-  ]) []).snd
+    (.predicate (.functionCall "getHorse" (.literal "Kate")) .equals (.literal "Korse")),
+    (.predicate (.functionCall "getHorse" (.literal "Matt")) .equals (.functionCall "getHorse" (.literal "Kate"))),
+    (.predicate (.functionCall "getHorse" (.literal "Joe")) .equals (.literal "Jorse"))
+  ] mockFindDomainByName) []).snd
 
 -- Examples/testing:
 
@@ -84,25 +166,25 @@ def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (
 #eval testConstraint { -- should be false
     functionName := "getHorse",
     functionParameter := "Matt",
-    assignedValue := "Matt's horse"
+    assignedValue := "Morse"
   } (.predicate (.literal "One string") .equals (.literal "Another string"))
   
 #eval testConstraint { -- should be true
     functionName := "getHorse",
     functionParameter := "Matt",
-    assignedValue := "Matt's horse"
+    assignedValue := "Morse"
   } (.predicate (.literal "Same string") .equals (.literal "Same string"))
 
 #eval testConstraint { -- should be false
     functionName := "getHorse",
     functionParameter := "Matt",
-    assignedValue := "Matt's horse"
+    assignedValue := "Morse"
   } (.predicate (.literal "Same string") .notEquals (.literal "Same string"))
 
 #eval testConstraint { -- should be false
     functionName := "getHorse",
     functionParameter := "Matt",
-    assignedValue := "Matt's horse"
+    assignedValue := "Morse"
   } (.invertedPredicate (.predicate (.literal "Same string") .equals (.literal "Same string")))
 
 -- a simple function can be tested against a unary constraint:
@@ -110,18 +192,43 @@ def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (
 #eval testConstraint { -- should be false
   functionName := "getHorse",
   functionParameter := "Matt",
-  assignedValue := "Matt's horse"
-} (.predicate (.functionCall "getHorse" (.literal "Matt")) .equals (.literal "Joe's horse"))
+  assignedValue := "Morse"
+} (.predicate (.functionCall "getHorse" (.literal "Matt")) .equals (.literal "Jorse"))
 
 #eval testConstraint { -- should be true
   functionName := "getHorse",
   functionParameter := "Matt",
-  assignedValue := "Matt's horse"
-} (.predicate (.functionCall "getHorse" (.literal "Matt")) .equals (.literal "Matt's horse"))
+  assignedValue := "Morse"
+} (.predicate (.functionCall "getHorse" (.literal "Matt")) .equals (.literal "Morse"))
 
 #eval testConstraint { -- should be true
   functionName := "getHorse",
   functionParameter := "Matt",
-  assignedValue := "Matt's horse"
-} (.predicate (.literal "Matt's horse") .equals (.functionCall "getHorse" (.literal "Matt"))) -- swapped args order
+  assignedValue := "Morse"
+} (.predicate (.literal "Morse") .equals (.functionCall "getHorse" (.literal "Matt"))) -- swapped args order
 
+-- negative predicates when we are missing info should be accepted 
+
+#eval testConstraint { -- should be true - not enough info to reject
+    functionName := "getHorse",
+    functionParameter := "Matt",
+    assignedValue := "Morse"
+  } (.predicate (.functionCall "getHorse" (.literal "Kate")) .notEquals (.literal "Korse"))
+
+#eval testConstraint { -- should be true - not enough info to reject
+    functionName := "getHorse",
+    functionParameter := "Matt",
+    assignedValue := "Morse"
+  } (.predicate (.functionCall "getHorse" (.literal "Kate")) .notEquals (.literal "Korse"))
+
+#eval testConstraint { -- should be true
+    functionName := "getHorse",
+    functionParameter := "Matt",
+    assignedValue := "Morse"
+  } (.predicate (.functionCall "getHorse" (.literal "Matt")) .notEquals (.literal "Korse"))
+
+#eval testConstraint { -- should be true - not enough info to reject
+    functionName := "getHorse",
+    functionParameter := "Matt",
+    assignedValue := "Morse"
+  } (.predicate (.functionCall "getHorse" (.literal "Matt")) .notEquals (.functionCall "getHorse" (.literal "Kate")))
