@@ -113,14 +113,15 @@ def substituteNewAssignmentIntoConstraints (assignment : PartialAssignment) (con
 - used in a filter over solutions to remove anything
 - uninteresting before returning them to the user.
 -/
-def LogicalPredicate.isNotTrivial (pred : LogicalPredicate) : Bool := 
+def LogicalPredicate.isSimpleAssignment (pred : LogicalPredicate) : Bool := 
   match pred with 
-    | .connect l _ r => l.isNotTrivial || r.isNotTrivial 
-    | .invertedPredicate x => x.isNotTrivial 
+    | .connect _ _ _ => False 
+    | .invertedPredicate _ => False 
     | .predicate l _ r => 
       match (l, r) with 
-        | (.literal _, .literal _) => False 
-        | (x, y) => x != y -- getHorse(Matt) == getHorse(Matt) should return false (trivial)
+        | (.functionCall _ (.literal _), .literal _) => True 
+        | (.literal _, .functionCall _ (.literal _)) => True 
+        | _ => False 
 
 def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (constraints : List LogicalPredicate) (getDomainByName : String -> List String) : StateT (List LogicalPredicate) Id Unit := do
   unless (<-get).isEmpty do return  -- only execute any code if a solution hasn't been found yet
@@ -128,7 +129,9 @@ def backtrack (remainingFnDomainAndRanges : List (String × String × String)) (
   match remainingFnDomainAndRanges with 
     | [] => 
       -- erasing duplicates because the solution can overlap with the initial constraints
-      let solution := constraints.eraseDups.filter LogicalPredicate.isNotTrivial
+      let solution := constraints
+                        |> List.eraseDups
+                        |> List.filter LogicalPredicate.isSimpleAssignment
       set solution
 
     | (fn, x, domain) :: xs => 

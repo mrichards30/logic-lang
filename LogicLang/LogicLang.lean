@@ -1,11 +1,11 @@
 def fileStream (filename : System.FilePath) : IO (Option IO.FS.Stream) := do
-    let fileExists ← filename.pathExists
+    let fileExists <- filename.pathExists
     if not fileExists then
-        let stderr ← IO.getStderr
-        stderr.putStrLn s!"file {filename} not found"
+        let stderr <- IO.getStderr
+        stderr.putStrLn s!"File {filename} not found"
         pure none
     else
-        let handle ← IO.FS.Handle.mk filename IO.FS.Mode.read
+        let handle <- IO.FS.Handle.mk filename IO.FS.Mode.read
         pure (some (IO.FS.Stream.ofHandle handle))
 
 def bufsize : USize := 20 * 1024
@@ -22,7 +22,7 @@ def printStream (stream : IO.FS.Stream) : IO Unit := do
 def main (args : List String) : IO UInt32 := do
     match args with
     | [] => 
-        IO.println "enter file name"
+        IO.println "please enter a file name"
         pure 64 -- incorrect usage
     | fileName :: _ =>
         let fileContents <- fileStream (System.FilePath.mk fileName)

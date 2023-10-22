@@ -48,12 +48,12 @@ def checkInjectiveFunctionDefinition (tokens : List Token) : TokenParserContext 
 def checkFunctionDefinition (tokens : List Token) : TokenParserContext Expression := 
     match tokens with
     | fnKeyword :: functionName :: doubleColon :: domain :: arrow :: range :: semicolon ::_ => do
-        if fnKeyword.tokenType != TokenType.Fn then delegate tokens
-        else 
-            assertOrderOfTokens 
-                    [TokenType.Fn, TokenType.Identifier, TokenType.DoubleColon, TokenType.Identifier, 
-                        TokenType.RightArrow, TokenType.Identifier, TokenType.Semicolon]
-                    [fnKeyword, functionName, doubleColon, domain, arrow, range, semicolon]
+        if fnKeyword.tokenType != TokenType.Fn then delegate tokens 
+
+        else assertOrderOfTokens 
+                [TokenType.Fn, TokenType.Identifier, TokenType.DoubleColon, TokenType.Identifier, 
+                    TokenType.RightArrow, TokenType.Identifier, TokenType.Semicolon]
+                [fnKeyword, functionName, doubleColon, domain, arrow, range, semicolon]
 
             ~> λ_ => pure (Expression.functionDefinition none functionName.lexeme domain.lexeme range.lexeme)
     | _ => delegate tokens
@@ -61,9 +61,9 @@ def checkFunctionDefinition (tokens : List Token) : TokenParserContext Expressio
 def checkEnumDefinition (tokens : List Token) : TokenParserContext Expression :=
     match tokens with 
     | enumKeyword :: enumIdentifier :: equalsSign :: firstIdentifier :: xs => do 
-        if enumKeyword.tokenType != TokenType.Enum then delegate tokens else 
+        if enumKeyword.tokenType != TokenType.Enum then delegate tokens 
         
-            assertOrderOfTokens 
+        else assertOrderOfTokens 
                 [TokenType.Enum, TokenType.Identifier, TokenType.Equals, TokenType.Identifier]
                 [enumKeyword, enumIdentifier, equalsSign, firstIdentifier] ~> λ_ => 
 

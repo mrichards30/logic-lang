@@ -1,6 +1,5 @@
 import LogicLang.Solver.Backtracker 
 import LogicLang.Syntax.Expressions 
-import LogicLang.Syntax.Parser 
 
 partial def extractConstraintsFromExpression (expr : Expression) : List LogicalPredicate := 
   match expr with 
@@ -23,26 +22,6 @@ partial def extractFunctionDefinitions (getDomainByName : String -> List String)
     | .enumDefinition _ _ => []
     | .functionDefinition _ f x domain => (getDomainByName x).map (λe => (f, e, domain))
 
-def testQuestion := parseMultiLineString 
-        "
-        enum Person = Matt | Dean | Liz | Kate;
-        enum Horse = Morse | Dorse | Lorse | Korse;
-        fn getHorse :: Person -> Horse;
-        
-        getHorse(Dean) != Morse;
-        getHorse(Dean) != Dorse;
-        getHorse(Dean) != Korse;
-        
-        getHorse(Dean) = getHorse(Matt);
-        getHorse(Matt) = getHorse(Liz);
-        getHorse(Liz) = getHorse(Kate);
-        "
-
-#eval testQuestion 
-
-#eval createDomainByNameTable <$> testQuestion  
-#eval extractConstraintsFromExpression <$> testQuestion   
-
 def getDomain (domains : List (String × List String)) (name : String) : List String := 
   match domains with
   
@@ -53,21 +32,9 @@ def getDomain (domains : List (String × List String)) (name : String) : List St
 
     | [] => []
 
-#eval (λe => getDomain e "Horse") <$> createDomainByNameTable <$> testQuestion
-#eval (λe => getDomain e "Person") <$> createDomainByNameTable <$> testQuestion
+def runSolver (expression : Expression) := 
+    let domainsByName := createDomainByNameTable expression 
+    let functionDefinitions := extractFunctionDefinitions (getDomain domainsByName) expression 
+    let constraints := extractConstraintsFromExpression expression 
 
-def testBacktracker := 
-  match testQuestion with 
-
-    | .ok question =>
-
-      let domainsByName := createDomainByNameTable question 
-      let functionDefinitions := extractFunctionDefinitions (getDomain domainsByName) question 
-      let constraints := extractConstraintsFromExpression question 
-
-      StateT.run (backtrack functionDefinitions constraints (getDomain domainsByName)) []
-
-    | .error _ => ((), [])
-
-#eval testBacktracker
-
+    StateT.run (backtrack functionDefinitions constraints (getDomain domainsByName)) []
