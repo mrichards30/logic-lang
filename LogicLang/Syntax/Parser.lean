@@ -208,7 +208,7 @@ def parseTokens (tokens : List Token) : Except String Expression :=
     
     match (handledResult, tokens.head?) with 
         | ({ result := some result, .. }, _) => .ok result 
-        | ({ errors := [], .. }, some t) => .error s!"could not parse line {t.lineNumber}; no parsing rule matched entered value."
+        | ({ errors := [], .. }, some t) => .error s!"could not parse line {t.lineNumber}; could not interpret keyword `{t.lexeme}`."
         | ({ errors := [], .. }, none) => .error "could not parse; no parsing rule matched entered value."
         | ({ errors := errors, .. }, _) => .error (errors |> toErrorMessage)
 

@@ -103,7 +103,7 @@ def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :
             let tokenStruct := {
                 tokenType := x,
                 lexeme := code.take charsToDrop,
-                lineNumber := lineNumber,
+                lineNumber := lineNumber + 1, -- zero-indexed, but shouldn't be for error messages
                 colNumber := colNumber
             }
             let remainingCodeToScan := code.drop charsToDrop
@@ -121,5 +121,6 @@ def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :
         | Except.ok lst => 
             Except.ok (lst.filter (λtoken => token.tokenType != TokenType.Space))
         | Except.error e => Except.error e
+        
     termination_by aux code => code.length     
     

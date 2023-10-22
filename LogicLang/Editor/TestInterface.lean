@@ -9,15 +9,16 @@ import LogicLang.Solver.Solver
 
 def testQuestion := parseMultiLineString 
         "
-        enum Horse = Morse | Lorse;
-        enum Person = Matt | Liz | Kate | Joe;
+        enum Person = Matt | Liz | Joe | Kate;
+        enum Horse = Morse | Lorse | Jorse | Korse;
 
         fn getHorse :: Person -> Horse;
 
-        getHorse(Matt) = Morse;
-        getHorse(Liz) = getHorse(Matt) ∨ getHorse(Liz) = getHorse(Kate);
-        getHorse(Kate) = getHorse(Joe);
-        getHorse(Joe) = Lorse; 
+        getHorse(Matt) = Morse ∨ getHorse(Matt) = Lorse;
+        getHorse(Liz) = Morse ∨ getHorse(Liz) = Lorse;
+        Korse = getHorse(Kate);
+        getHorse(Matt) != Lorse; 
+        getHorse(Joe) = getHorse(Liz); 
         "
 #eval testQuestion
 

@@ -1,0 +1,10 @@
+enum Person = Matt | Liz | Joe | Kate;
+enurm Horse = Morse | Lorse | Jorse | Korse;
+
+fn getHorse :: Person -> Horse;
+
+getHorse(Matt) = Morse ∨ getHorse(Matt) = Lorse;
+getHorse(Liz) = Morse ∨ getHorse(Liz) = Lorse;
+Korse = getHorse(Kate);
+getHorse(Matt) != Lorse; 
+getHorse(Joe) = getHorse(Liz); 

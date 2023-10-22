@@ -1,14 +1,12 @@
 import Lake
 open Lake DSL
 
-package «logic_lang» {
-  -- add any package configuration options here
-}
+package «logic_lang» where
+  -- add package configuration options here
 
-require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git"
+lean_lib «LogicLang» where
+  -- add library configuration options here
 
 @[default_target]
-lean_lib «LogicLang» {
-  -- add any library configuration options here
-}
+lean_exe «logiclang» where
+  root := `LogicLang

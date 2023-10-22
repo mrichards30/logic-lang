@@ -12,11 +12,11 @@ class WithErrors (X : Type -> Type -> Type -> Type) where
 instance : WithErrors ParserContext  where
   error x current := { current with errors := x :: current.errors }
 
-class HandlerChain (X : Type -> Type -> Type) where 
+class ChainableHandler (X : Type -> Type -> Type) where 
   yield (val : α) (current : X i α) : X i α
   delegate (current : X i α) (next : i -> X i α) : X i α
 
-instance : HandlerChain (ParserContext ε)  where 
+instance : ChainableHandler (ParserContext ε)  where 
   yield x current := { current with result := x }
   delegate current next := match current.result with
     | some _ => current 
@@ -31,8 +31,7 @@ instance : Monad (ParserContext ε (List Token)) where
     }
   pure x := { result := x, input := [] }
   
-
-infix:72 " ~> " => HandlerChain.delegate
+infix:72 " ~> " => ChainableHandler.delegate
 
 abbrev TokenParserContext (α : Type) := ParserContext (Token × String) (List Token) α 
 
