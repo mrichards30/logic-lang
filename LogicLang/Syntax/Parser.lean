@@ -207,8 +207,16 @@ def parseTokens (tokens : List Token) : Except String Expression :=
         ~> λnext => checkAssertionExpression next
     
     match (handledResult, tokens.head?) with 
-        | ({ result := some result, errors := [], .. }, _) => .ok result 
-        | ({ errors := errors, .. }, _) => .error (errors |> toErrorMessage)
+        | ({ result := some result, errors := [], .. }, _) => .ok result
+        
+        | ({ errors := [], .. }, some offender) => 
+            .error s!"error on line {offender.lineNumber}, column {offender.colNumber}; unknown keyword `{offender.lexeme}`"
+        
+        | ({ errors := [], .. }, none) => 
+            .error s!"an unknown error occured; could not parse line."
+        
+        | ({ errors := errors, .. }, _) => 
+            .error (errors |> toErrorMessage)
 
     where toErrorMessage (errors : List (Token × String)) := 
         errors.map (λ(t, e) => s!"error on line {t.lineNumber}, column {t.colNumber}: {e}")

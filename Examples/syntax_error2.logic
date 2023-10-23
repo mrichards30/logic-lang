@@ -1,0 +1,6 @@
+enum Person | Joe;
+enum Horse = Morse | Lorse | Jorse | Korse;
+
+fn getHorse = Person -> Horse;
+
+getHorse(Joe) = Morse;

@@ -110,7 +110,7 @@ def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :
             if (remainingCodeToScan.length < code.length) then
                 match aux remainingCodeToScan with 
                     | Except.ok c => Except.ok (tokenStruct :: c)
-                    | Except.error e => Except.error e
+                    | Except.error e => Except.error s!"fml aaahh {e}"
             else 
                 Except.error s!"an error occurred; scanner got stuck on line {lineNumber}, column {colNumber}"
         | (_, Except.error e) => 

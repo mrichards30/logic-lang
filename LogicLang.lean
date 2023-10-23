@@ -26,6 +26,16 @@ def convertStreamToString (stream : IO.FS.Stream) : IO String := do
     return accumulator
     
 
+def getReadableResultFromContents (streamContents : String) : Option String := 
+
+    let expression := parseMultiLineString streamContents
+    let parserResponse := runSolver <$> expression
+    
+    match parserResponse with
+        | .error e => some e 
+        | .ok (_, e) => createAsciiTable e
+
+
 -- exit codes from https://man.freebsd.org/cgi/man.cgi?query=sysexits&apropos=0&sektion=0&manpath=FreeBSD+4.3-RELEASE&format=html 
 
 def main (args : List String) : IO UInt32 := do
@@ -40,19 +50,16 @@ def main (args : List String) : IO UInt32 := do
 
                 let streamContents <- convertStreamToString stream
 
-                let expression := parseMultiLineString streamContents
-                let parserResponse := runSolver <$> expression
-
-                let result : Option String := 
-                    match parserResponse with
-                        | .error e => some e
-                        | .ok (_, e) => createAsciiTable e
+                let result := getReadableResultFromContents streamContents
 
                 match result with 
                     | some e => IO.eprintln e
-                    | none => pure () 
+                    | none => pure ()
 
                 pure 64 
             | none => pure 66 -- unreadable input
         pure 0
-        
+
+#eval main ["./Examples/valid_example1.logic"]
+#eval main ["./Examples/syntax_error1.logic"]
+#eval main ["./Examples/syntax_error2.logic"]
