@@ -2,12 +2,6 @@ import LogicLang.Editor.SolutionTableConstructor
 import LogicLang.Syntax.Parser
 import LogicLang.Solver.Solver
 
-structure EditorState where
-    test : Nat := 0
-deriving Repr
-
-abbrev StatefulIO (α : Type) := StateT EditorState IO α
-
 def fileStream (filename : System.FilePath) : IO (Option IO.FS.Stream) := do
     let fileExists <- filename.pathExists
     if not fileExists then
@@ -25,7 +19,8 @@ def convertStreamToString (stream : IO.FS.Stream) : IO String := do
     let mut buffer <- stream.read bufsize 
     
     while !buffer.isEmpty do
-        accumulator := s!"{accumulator}{String.fromUTF8Unchecked buffer}"
+        let bufferAsString := String.fromUTF8Unchecked buffer
+        accumulator := s!"{accumulator}{bufferAsString}"
         buffer <- stream.read bufsize 
 
     return accumulator
