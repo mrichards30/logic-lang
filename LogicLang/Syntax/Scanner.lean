@@ -115,10 +115,7 @@ def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :
             let msg := s!"unexpected character `{e}` on line {lineNumber}, column {colNumber}"
             Except.error msg
 
-    match aux code with 
-        | Except.ok lst => 
-            Except.ok (lst.filter (λtoken => token.tokenType != TokenType.Space))
-        | Except.error e => Except.error e
+    (λlst => lst.filter (λtoken => token.tokenType != TokenType.Space)) <$> aux code  
         
     termination_by aux code => code.length     
     
