@@ -10,12 +10,14 @@ deriving Repr, BEq
 inductive LogicalConnective where
     | or : LogicalConnective 
     | and : LogicalConnective
+    | implies : LogicalConnective
 deriving Repr, BEq
 
 instance : ToString LogicalConnective where
     toString op := match op with 
         | LogicalConnective.or => "∨"
         | LogicalConnective.and => "∧"
+        | LogicalConnective.implies => "->"
 
 inductive Value where
     | literal : String -> Value

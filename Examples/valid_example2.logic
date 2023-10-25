@@ -1,0 +1,11 @@
+enum Person = Jack | Anne | George;
+enum Bool = True | False;
+
+fn isLookingAt :: Person -> Person;
+fn isMarried :: Person -> Bool;
+
+isLookingAt(Jack) = Anne;
+isLookingAt(Anne) = George;
+
+isMarried(Jack) = True;
+isMarried(George) = False;

@@ -8,7 +8,7 @@ def delegate (input : List Token) : TokenParserContext α := {
 def error (token : Token) (error : String) (input : List Token) : TokenParserContext α := {
     input := input,
     errors := [(token, error)]
-} -- refactor this to use inline throw like ExceptT ? 
+} 
 
 def assertOrderOfTokens (expected : List TokenType) (actual : List Token) : TokenParserContext Expression := 
     if expected.length == actual.length then
@@ -61,30 +61,34 @@ def checkFunctionDefinition (tokens : List Token) : TokenParserContext Expressio
 def checkEnumDefinition (tokens : List Token) : TokenParserContext Expression :=
     match tokens with 
     | enumKeyword :: enumIdentifier :: equalsSign :: firstIdentifier :: xs => do 
-        if enumKeyword.tokenType != TokenType.Enum then delegate tokens 
+        unless enumKeyword.tokenType == TokenType.Enum do delegate tokens 
         
-        else assertOrderOfTokens 
-                [TokenType.Enum, TokenType.Identifier, TokenType.Equals, TokenType.Identifier]
-                [enumKeyword, enumIdentifier, equalsSign, firstIdentifier] ~> λ_ => 
+        assertOrderOfTokens 
+            [TokenType.Enum, TokenType.Identifier, TokenType.Equals, TokenType.Identifier]
+            [enumKeyword, enumIdentifier, equalsSign, firstIdentifier] 
 
+        ~> λ_ => 
             let remainder := xs.takeWhile (λtoken => token.tokenType != TokenType.Semicolon)
             let rec takeEnumValues (nextTokens : List Token) : Except String (List String) := 
                 match nextTokens with 
                 | pipe :: identifier :: [] => 
                     if pipe.tokenType == TokenType.Pipe then Except.ok [identifier.lexeme] 
-                    else Except.error "expected pipe; did not find one"
+                    else .error s!"expected a pipe '|' at line {pipe.lineNumber}, column {pipe.colNumber}." 
                 | pipe :: identifier :: xs => 
-                    match takeEnumValues xs with 
-                    | Except.ok nextEnum => Except.ok (identifier.lexeme :: nextEnum)
-                    | Except.error error => Except.error error
+                    if pipe.tokenType != TokenType.Pipe then .error s!"expected a pipe '|' at line {pipe.lineNumber}, column {pipe.colNumber}." 
+                    else if identifier.tokenType != TokenType.Identifier then .error s!"expected an enum value at line {identifier.lineNumber}, column {identifier.colNumber}." 
+                    else 
+                        match takeEnumValues xs with 
+                        | Except.ok nextEnum => Except.ok (identifier.lexeme :: nextEnum)
+                        | Except.error error => Except.error error
                 | [] => Except.ok [firstIdentifier.lexeme]
                 | _ => Except.error s!"bad enum definition on line {enumKeyword.lineNumber}; please use `enum Name = First | Second | Third;` and ensure a semicolon ends the line."
             
             match takeEnumValues remainder with 
-            | Except.ok subsequentEnumValues => 
-                let enumValues := firstIdentifier.lexeme :: subsequentEnumValues
-                return .enumDefinition enumIdentifier.lexeme enumValues
-            | Except.error e => error enumKeyword e tokens
+                | Except.ok subsequentEnumValues => 
+                    let enumValues := firstIdentifier.lexeme :: subsequentEnumValues
+                    return .enumDefinition enumIdentifier.lexeme enumValues
+                | Except.error e => error enumKeyword e tokens
 
     | _ => delegate tokens
 
@@ -183,18 +187,20 @@ def checkAssertionExpression (tokens : List Token) : TokenParserContext Expressi
 
         match (leftExpr, rightExpr) with
             | ({ result := Expression.assertion l, .. }, { result := Expression.assertion r, .. }) => 
-                return Expression.assertion (LogicalPredicate.connect (l) op r)
+                return Expression.assertion (LogicalPredicate.connect l op r)
 
             | ({ errors := leftErrors, .. }, { errors := rightErrors, .. }) => 
                 { input := tokens, errors := leftErrors ++ rightErrors }
 
     let andOpWithIndex? := findWithIndex? (λtoken => token.tokenType == TokenType.And) tokens
     let orOpWithIndex? := findWithIndex? (λtoken => token.tokenType == TokenType.Or) tokens
+    let implyOpWithIndex? := findWithIndex? (λtoken => token.tokenType == TokenType.RightArrow) tokens
 
-    match (andOpWithIndex?, orOpWithIndex?) with
-        | (some (and, index), _) => handleConnectedPredicate and index LogicalConnective.and
-        | (none, some (or, index)) => handleConnectedPredicate or index LogicalConnective.or -- and before or 
-        | (none, none) => handle tokens
+    match (implyOpWithIndex?, andOpWithIndex?, orOpWithIndex?) with
+        | (some (imply, index), _, _) => handleConnectedPredicate imply index LogicalConnective.implies -- and before or 
+        | (none, some (and, index), _) => handleConnectedPredicate and index LogicalConnective.and
+        | (none, none, some (or, index)) => handleConnectedPredicate or index LogicalConnective.or -- and before or 
+        | (none, none, none) => handle tokens
         
     termination_by checkAssertionExpression xs => xs.length 
 
@@ -210,7 +216,9 @@ def parseTokens (tokens : List Token) : Except String Expression :=
         | ({ result := some result, errors := [], .. }, _) => .ok result
         
         | ({ errors := [], .. }, some offender) => 
-            .error s!"error on line {offender.lineNumber}, column {offender.colNumber}; unknown keyword `{offender.lexeme}`"
+            if tokens.reverse.head?.map (λc => c.tokenType == TokenType.Semicolon) != some Bool.true
+                then .error s!"error on line {offender.lineNumber}; expected semicolon at the end of the line but did not find one."
+                else .error s!"error on line {offender.lineNumber}, column {offender.colNumber}; could not parse line beginning with keyword `{offender.lexeme}`. does it exist?"
         
         | ({ errors := [], .. }, none) => 
             .error s!"an unknown error occured; could not parse line."
@@ -227,7 +235,6 @@ def parseSingleLineString (input : String) (lineNumber : Nat) : Except String Ex
     parseTokens tokens 
 
 def parseMultiLineString (input : String) : Except String Expression :=
-
     let lines := String.splitOn input "\n"
     let indexList := List.range lines.length
     let linesByIndex := lines.zip indexList 
@@ -244,16 +251,15 @@ def parseMultiLineString (input : String) : Except String Expression :=
 
 def horseQuestion := parseMultiLineString 
         "
-        enum Equestrian = Mountback | Hacking | Klamberon | Topalov;
-        enum Horse = Bay | Black | Chestnut | Gray;
-        enum Activity = StandingStill | Jumping | Trotting | GallopingWithMountback;
+        enum Person = Matt | Liz | Joe | Kate;
+        enum Horse = Morse | Lorse | Jorse | Korse;
 
-        injective fn getActivity :: Horse -> Activity;
-        injective fn getHorse :: Equestrian -> Horse; 
+        fn getHorse :: Person -> Horse;
 
-        getHorse(Hacking) = Bay ∨ getActivity(Mountback) = Bay; 
-        getActivity(getHorse(Klamberon)) != Jumping;
-        getActivity(Gray) != Trotting;
-        getHorse(Topalov) = Chestnut;
+        getHorse(Matt) = Morse ∨ getHorse(Matt) = Lorse;
+        getHorse(Liz) = Morse ∨ getHorse(Liz) = Lorse;
+        Korse = getHorse(Kate);
+        getHorse(Joe) = getHorse(Liz); 
+        getHorse(Liz) = Lorse -> getHorse(Matt) = Morse;
         "
 #eval horseQuestion

@@ -61,5 +61,6 @@ def main (args : List String) : IO UInt32 := do
         pure 0
 
 #eval main ["./Examples/valid_example1.logic"]
+#eval main ["./Examples/valid_example2.logic"]
 #eval main ["./Examples/syntax_error1.logic"]
 #eval main ["./Examples/syntax_error2.logic"]

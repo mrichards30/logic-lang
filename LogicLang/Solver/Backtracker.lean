@@ -30,8 +30,9 @@ partial def testConstraint (expr : PartialAssignment) (constraint : LogicalPredi
   match constraint with 
 
     | .connect left op right => 
-       match op with 
-        | .and => testConstraint expr left && testConstraint expr right -- and before or
+       match op with -- precedence: implies then and then or 
+        | .implies => testConstraint expr (.invertedPredicate left) || testConstraint expr right 
+        | .and => testConstraint expr left && testConstraint expr right 
         | .or => testConstraint expr left || testConstraint expr right 
     
     | .predicate left op right => 
