@@ -1,39 +1,40 @@
 import LogicLang.Proof.Lemmas
 import LogicLang.Syntax.Expressions
 
-inductive TokenType where  
+inductive TokenType where
     -- single-character symbols
-    | LeftParen 
+    | LeftParen
     | RightParen
-    | Pipe 
+    | Pipe
     | Semicolon
-    | Equals 
-    | Not 
-    | And 
-    | Or 
-    | ForAll 
+    | Equals
+    | Not
+    | And
+    | Or
+    | ForAll
     | Exists
     | FullStop
 
     -- two-character symbols
-    | RightArrow 
+    | RightArrow
     | NotEquals
-    | DoubleColon 
+    | DoubleColon
+    | DoubleHyphen
 
-    -- literals 
+    -- literals
     | Identifier
 
     -- keywords
-    | Injective 
-    | Fn 
+    | Injective
+    | Fn
     | Enum
 
     | Space -- gets filtered out during tokenising
     | EndOfFile
 deriving Repr, BEq
 
-instance : ToString TokenType where 
-    toString token := 
+instance : ToString TokenType where
+    toString token :=
         match token with
         | TokenType.Space => " "
         | TokenType.LeftParen => ")"
@@ -53,12 +54,14 @@ instance : ToString TokenType where
         | TokenType.Identifier => "<identifier>"
         | TokenType.Enum => "enum"
         | TokenType.Fn => "fn"
+        | TokenType.DoubleHyphen => "--"
         | TokenType.Injective => "injective"
         | TokenType.EndOfFile => "¬"
 
-def scanToken (code : String) : (Nat × Except Char TokenType) := 
-    match code.data with 
+def scanToken (code : String) : (Nat × Except Char TokenType) :=
+    match code.data with
         | ' ' :: _ => (1, Except.ok TokenType.Space)
+        | '-' :: '-' :: _ => (1, Except.ok TokenType.DoubleHyphen)
         | '(' :: _ => (1, Except.ok TokenType.LeftParen)
         | ')' :: _ => (1, Except.ok TokenType.RightParen)
         | '|' :: _ => (1, Except.ok TokenType.Pipe)
@@ -73,33 +76,35 @@ def scanToken (code : String) : (Nat × Except Char TokenType) :=
         | '-' :: '>' :: _ => (2, Except.ok TokenType.RightArrow)
         | '!' :: '=' :: _ => (2, Except.ok TokenType.NotEquals)
         | ':' :: ':' :: _ => (2, Except.ok TokenType.DoubleColon)
-        | x :: _ => 
-            if x.isAlpha then 
+        | x :: _ =>
+            if x.isAlpha then
                 let identifierTerm := code.takeWhile Char.isAlpha
-                let tokenType : TokenType := 
+                let tokenType : TokenType :=
                     if identifierTerm = "fn" then .Fn
                     else if identifierTerm = "injective" then .Injective
                     else if identifierTerm = "enum" then .Enum
                     else .Identifier
                 (identifierTerm.length, Except.ok tokenType)
-            else 
+            else
                 (1, Except.error x)
         | [] => (0, Except.ok .EndOfFile)
 
 structure Token where -- meaningless defaults make testing/debugging faster and easier as we don't have to write everything out
-    tokenType : TokenType  
+    tokenType : TokenType
     lexeme : String := "<lexeme>"
     lineNumber : Nat := 0
     colNumber : Nat := 0
 deriving Repr
 
-def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) := 
+def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :=
+    if code.trim.startsWith "--" then .ok [] else -- i.e., don't scan comments
+
     let originalCodeLength := code.length
-    let rec aux (code : String) : Except String (List Token) := 
-        let colNumber := originalCodeLength - code.length 
-        match scanToken code with 
+    let rec aux (code : String) : Except String (List Token) :=
+        let colNumber := originalCodeLength - code.length
+        match scanToken code with
         | (_, Except.ok TokenType.EndOfFile) => Except.ok []
-        | (charsToDrop, Except.ok x) => 
+        | (charsToDrop, Except.ok x) =>
             let tokenStruct := {
                 tokenType := x,
                 lexeme := code.take charsToDrop,
@@ -109,13 +114,12 @@ def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :
             let remainingCodeToScan := code.drop charsToDrop
             if (remainingCodeToScan.length < code.length) then
                 aux remainingCodeToScan >>= (λc => pure (tokenStruct :: c))
-            else 
+            else
                 Except.error s!"an error occurred; scanner got stuck on line {lineNumber}, column {colNumber}"
-        | (_, Except.error e) => 
+        | (_, Except.error e) =>
             let msg := s!"unexpected character `{e}` on line {lineNumber}, column {colNumber}"
             Except.error msg
 
-    (λlst => lst.filter (λtoken => token.tokenType != TokenType.Space)) <$> aux code  
-        
-    termination_by aux code => code.length     
-    
+    (λlst => lst.filter (λtoken => token.tokenType != TokenType.Space)) <$> aux code
+
+    termination_by aux code => code.length

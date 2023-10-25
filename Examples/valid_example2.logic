@@ -1,11 +1,18 @@
-enum Person = Jack | Anne | George;
-enum Bool = True | False;
+-- If Brenda didn’t take Harry, Ian was with either Alice or Emma.
+-- If Emma escorted Ken, then Harry was taken by either Claire or Daphne.
+-- If Claire took neither Gary nor James, Brenda escorted Ken.
+-- If Gary wasn’t with Alice, Brenda took either Ian or Ken.
+-- If Emma didn’t escort James then, if Brenda and Gary weren’t together, Daphne took Ian.
+-- If Claire’s partner was Harry then, if Daphne’s wasn’t James, Alice escorted Ken.
 
-fn isLookingAt :: Person -> Person;
-fn isMarried :: Person -> Bool;
+enum Man = Harry | Ian | Ken | Gary | James;
+enum Woman = Brenda | Alice | Emma | Claire | Daphne;
 
-isLookingAt(Jack) = Anne;
-isLookingAt(Anne) = George;
+injective fn getPartner :: Woman -> Man;
 
-isMarried(Jack) = True;
-isMarried(George) = False;
+getPartner(Brenda) != Harry -> getPartner(Alice) = Ian ∨ getPartner(Emma) = Ian
+getPartner(Emma) = Ken -> getPartner(Claire) = Harry ∨ getPartner(Daphne) = Harry 
+getPartner(Claire) != Gary ∧ getPartner(Claire) != James -> getPartner(Brenda) = Ken 
+getPartner(Alice) != Gary -> getPartner(Brenda) = Ian ∨ getPartner(Brenda) = Ken
+getPartner(Emma) != James -> getPartner(Brenda) != Gary -> getPartner(Daphne) = Ian 
+getPartner(Claire) = Harry -> getPartner(Daphne) != James -> getPartner(Alice) = Ken 
