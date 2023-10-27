@@ -115,9 +115,11 @@ def scanTokens (code : String) (lineNumber : Nat) : Except String (List Token) :
             if (remainingCodeToScan.length < code.length) then
                 aux remainingCodeToScan >>= (λc => pure (tokenStruct :: c))
             else
-                Except.error s!"an error occurred; scanner got stuck on line {lineNumber}, column {colNumber}"
+                Except.error (s!"an error occurred; scanner got stuck on line "
+                                    ++ s!"{lineNumber}, column {colNumber}")
         | (_, Except.error e) =>
-            let msg := s!"unexpected character `{e}` on line {lineNumber}, column {colNumber}"
+            let msg := (s!"unexpected character `{e}` on line "
+                            ++ s!"{lineNumber}, column {colNumber}")
             Except.error msg
 
     (λlst => lst.filter (λtoken => token.tokenType != TokenType.Space)) <$> aux code
