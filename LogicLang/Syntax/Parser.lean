@@ -22,7 +22,7 @@ def assertOrderOfTokens (expected : List TokenType) (actual : List Token) : Toke
 
             match failure with
             | some (type, token) => error
-                token s!"unexpected token `{token.lexeme}` at line {token.lineNumber} column {token.colNumber}; expected to see `{type}` here" actual
+                token s!"unexpected token `{token.lexeme}`; expected to see `{type}` here" actual
             | none => match actual.head? with
                 | none => delegate actual
                 | some h => error h "unexpected token" actual
@@ -75,14 +75,14 @@ def checkEnumDefinition (tokens : List Token) : TokenParserContext Expression :=
                     if pipe.tokenType == TokenType.Pipe then Except.ok [identifier.lexeme]
                     else .error s!"expected a pipe '|' at line {pipe.lineNumber}, column {pipe.colNumber}."
                 | pipe :: identifier :: xs =>
-                    if pipe.tokenType != TokenType.Pipe then .error s!"expected a pipe '|' at line {pipe.lineNumber}, column {pipe.colNumber}."
-                    else if identifier.tokenType != TokenType.Identifier then .error s!"expected an enum value at line {identifier.lineNumber}, column {identifier.colNumber}."
+                    if pipe.tokenType != TokenType.Pipe then .error s!"expected a pipe '|'"
+                    else if identifier.tokenType != TokenType.Identifier then .error s!"expected an enum value."
                     else
                         match takeEnumValues xs with
                         | Except.ok nextEnum => Except.ok (identifier.lexeme :: nextEnum)
                         | Except.error error => Except.error error
                 | [] => Except.ok [firstIdentifier.lexeme]
-                | _ => Except.error s!"bad enum definition on line {enumKeyword.lineNumber}; please use `enum Name = First | Second | Third;` and ensure a semicolon ends the line."
+                | _ => Except.error s!"bad enum definition; please use `enum Name = First | Second | Third;` and ensure a semicolon ends the line."
 
             match takeEnumValues remainder with
                 | Except.ok subsequentEnumValues =>
@@ -125,8 +125,7 @@ def parseValue (tokens : List Token) : TokenParserContext Value :=
                     | { result := none, errors := [], .. } => return Value.literal snd.lexeme
                     | current => current
 
-                else
-                    error fst s!"unexpected character `{snd.tokenType}` on line {snd.lineNumber}, column {snd.colNumber}" tokens
+                else error fst s!"could not parse value `{fst.lexeme}`; is it a misspelt keyword, or a malformed function call?" tokens
             else
                 delegate tokens
         | [fst] => if fst.tokenType == TokenType.Identifier then return Value.literal fst.lexeme
@@ -230,7 +229,7 @@ def parseTokens (tokens : List Token) : Except String Expression :=
 
     where toErrorMessage (errors : List (Token × String)) :=
         errors.map (λ(t, e) => s!"error on line {t.lineNumber}, column {t.colNumber}: {e}")
-        |> List.foldl (λnext (acc: String) => s!"{next}; {acc}") ""
+        |> List.foldl (λnext (acc: String) => if next.isEmpty then acc else s!"{next};\n{acc}") ""
 
 def parseSingleLineString (input : String) (lineNumber : Nat) : Except String Expression := do
     let tokens <- scanTokens input lineNumber
